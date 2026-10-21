@@ -6,7 +6,11 @@
   <title>Salva in Progetti</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   <script src="msal-browser.min.js"></script>
-  <link rel="stylesheet" href="taskpane.css?v=3">
+  <script>
+    // timestamp bypasses Outlook's add-in cache so updates apply immediately
+    const t = Date.now();
+    document.write(`<link rel="stylesheet" href="taskpane.css?t=${t}">`);
+  </script>
 </head>
 <body>
   <h1>Salva in Progetti</h1>
@@ -28,7 +32,6 @@
 
   <button id="save" disabled>Salva</button>
   <div id="status" role="status"></div>
-
-  <script src="taskpane.js?v=3"></script>
+  <script>document.write(`<script src="taskpane.js?t=${t}"><\/script>`);</script>
 </body>
 </html>
