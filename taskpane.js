@@ -11,6 +11,7 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024;
 const CHUNK = 320 * 1024 * 12; // upload session chunks must be multiples of 320 KiB
 const ROOT_OPTION = "__root__";
+const ROTATABLE = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
 const $ = (id) => document.getElementById(id);
 let pca;
@@ -28,6 +29,7 @@ Office.onReady(async () => {
   $("folder").addEventListener("change", updateSaveButton);
   $("saveMail").addEventListener("change", updateSaveButton);
   $("attachments").addEventListener("change", updateSaveButton);
+  $("attachments").addEventListener("click", onRotateClick);
   $("save").addEventListener("click", save);
   try {
     await loadProjects();
@@ -131,18 +133,76 @@ function renderAttachments() {
   const atts = Office.context.mailbox.item.attachments || [];
   if (!atts.length) { box.textContent = "Nessun allegato"; return; }
   for (const a of atts) {
-    const label = document.createElement("label");
+    const isCloud = a.attachmentType === Office.MailboxEnums.AttachmentType.Cloud;
+    let { base, ext } = splitName(a.name);
+    if (a.attachmentType === Office.MailboxEnums.AttachmentType.Item && !ext) ext = ".eml";
+
+    const row = document.createElement("div");
+    row.className = "att";
+    row.dataset.id = a.id;
+    row.dataset.original = a.name;
+    row.dataset.ext = ext;
+    row.dataset.rotation = "0";
+
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.value = a.id;
-    cb.dataset.name = a.name;
-    cb.dataset.type = a.attachmentType;
-    const isCloud = a.attachmentType === Office.MailboxEnums.AttachmentType.Cloud;
     cb.checked = !a.isInline && !isCloud;
     cb.disabled = isCloud;
-    label.append(cb, ` ${a.name} (${formatSize(a.size)})${a.isInline ? " – nel testo" : ""}${isCloud ? " – link cloud, non salvabile" : ""}`);
-    box.append(label);
+    cb.title = "Salva questo allegato";
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "name";
+    name.value = base;
+    name.disabled = isCloud;
+    name.title = "Nome del file (modificabile)";
+
+    const extSpan = document.createElement("span");
+    extSpan.className = "ext";
+    extSpan.textContent = ext;
+
+    const line = document.createElement("div");
+    line.className = "line";
+    line.append(cb, name, extSpan);
+
+    const info = document.createElement("div");
+    info.className = "hint";
+    info.textContent = `${formatSize(a.size)}${a.isInline ? " – nel testo" : ""}${isCloud ? " – link cloud, non salvabile" : ""}`;
+
+    if (!isCloud && ROTATABLE[ext.slice(1).toLowerCase()]) {
+      const left = rotateButton("↺", -90, "Ruota 90° in senso antiorario");
+      const right = rotateButton("↻", 90, "Ruota 90° in senso orario");
+      const angle = document.createElement("span");
+      angle.className = "angle";
+      info.append(" ", left, right, angle);
+    }
+    row.append(line, info);
+    box.append(row);
   }
+}
+
+function splitName(name) {
+  const m = name.match(/^(.+?)(\.[A-Za-z0-9]{1,5})?$/);
+  return m ? { base: m[1], ext: m[2] || "" } : { base: name, ext: "" };
+}
+
+function rotateButton(text, delta, title) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "rot";
+  b.textContent = text;
+  b.title = title;
+  b.dataset.delta = delta;
+  return b;
+}
+
+function onRotateClick(e) {
+  const btn = e.target.closest("button.rot");
+  if (!btn) return;
+  const row = btn.closest(".att");
+  const rotation = (Number(row.dataset.rotation) + Number(btn.dataset.delta) + 360) % 360;
+  row.dataset.rotation = rotation;
+  row.querySelector(".angle").textContent = rotation ? ` ruotato ${rotation}° orario` : "";
 }
 
 function formatSize(bytes) {
@@ -150,7 +210,7 @@ function formatSize(bytes) {
 }
 
 function selectedAttachments() {
-  return [...$("attachments").querySelectorAll("input:checked")];
+  return [...$("attachments").querySelectorAll(".att")].filter((row) => row.querySelector("input[type=checkbox]").checked);
 }
 
 function updateSaveButton() {
@@ -181,6 +241,40 @@ function base64ToBytes(b64) {
 function contentToBytes(content) {
   const F = Office.MailboxEnums.AttachmentContentFormat;
   return content.format === F.Base64 ? base64ToBytes(content.content) : new TextEncoder().encode(content.content);
+}
+
+async function rotate(bytes, ext, angle) {
+  if (ext === "pdf") {
+    await loadScript("pdf-lib.min.js");
+    const doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    for (const page of doc.getPages()) {
+      page.setRotation(PDFLib.degrees((page.getRotation().angle + angle) % 360));
+    }
+    return doc.save();
+  }
+  const type = ROTATABLE[ext];
+  const img = await createImageBitmap(new Blob([bytes], { type }));
+  const canvas = document.createElement("canvas");
+  const sideways = angle % 180 !== 0;
+  canvas.width = sideways ? img.height : img.width;
+  canvas.height = sideways ? img.width : img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((angle * Math.PI) / 180);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, 0.92));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+const scripts = {};
+function loadScript(src) {
+  return (scripts[src] ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`Impossibile caricare ${src}`));
+    document.head.append(s);
+  }));
 }
 
 function safeFileName(name) {
@@ -224,15 +318,18 @@ async function save() {
   const saved = [];
   const failed = [];
 
-  for (const cb of selectedAttachments()) {
+  for (const row of selectedAttachments()) {
     try {
-      const content = await getAttachmentContent(cb.value);
-      let name = cb.dataset.name;
-      if (cb.dataset.type === Office.MailboxEnums.AttachmentType.Item && !/\.\w{2,4}$/.test(name)) name += ".eml";
-      const item = await upload(folderPath, safeFileName(name), contentToBytes(content));
+      const content = await getAttachmentContent(row.dataset.id);
+      let bytes = contentToBytes(content);
+      const ext = row.dataset.ext;
+      const rotation = Number(row.dataset.rotation);
+      if (rotation) bytes = await rotate(bytes, ext.slice(1).toLowerCase(), rotation);
+      const base = row.querySelector(".name").value.trim() || splitName(row.dataset.original).base;
+      const item = await upload(folderPath, safeFileName(base + ext), bytes);
       saved.push(item.name);
     } catch (e) {
-      failed.push(`${cb.dataset.name}: ${e.message || e}`);
+      failed.push(`${row.dataset.original}: ${e.message || e}`);
     }
   }
 

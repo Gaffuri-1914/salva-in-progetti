@@ -12,3 +12,10 @@ fieldset label { font-weight: normal; margin: 4px 0; }
 button { margin-top: 12px; width: 100%; padding: 8px; font-size: 15px; background: #0f6cbd; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
 button:disabled { background: #999; cursor: default; }
 #status { margin-top: 10px; white-space: pre-wrap; }
+.att { margin: 6px 0 10px; }
+.att .line { display: flex; align-items: center; gap: 4px; }
+.att .name { flex: 1; min-width: 0; padding: 4px; font-size: 13px; }
+.att .ext { color: #444; font-size: 13px; }
+.att .hint { margin-left: 22px; }
+button.rot { width: auto; margin: 0 2px; padding: 0 8px; font-size: 16px; line-height: 22px; background: #eef4fb; color: #0f6cbd; border: 1px solid #0f6cbd; }
+.angle { color: #0f6cbd; font-weight: 600; }
