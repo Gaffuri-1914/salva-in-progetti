@@ -235,7 +235,8 @@ async function pdfThumbnail(bytes) {
   const pdfjs = await (pdfjsModule ??= import("./pdf.min.mjs"));
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", location.href).href;
   // pdf.js detaches the buffer it receives, so pass a copy
-  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const task = pdfjs.getDocument({ data: bytes.slice() });
+  const doc = await task.promise;
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
@@ -246,7 +247,7 @@ async function pdfThumbnail(bytes) {
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
     return canvas.toDataURL("image/png");
   } finally {
-    doc.destroy();
+    task.destroy();
   }
 }
 
