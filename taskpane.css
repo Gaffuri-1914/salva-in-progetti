@@ -19,3 +19,5 @@ button:disabled { background: #999; cursor: default; }
 .att .hint { margin-left: 22px; }
 button.rot { width: auto; margin: 0 2px; padding: 0 8px; font-size: 16px; line-height: 22px; background: #eef4fb; color: #0f6cbd; border: 1px solid #0f6cbd; }
 .angle { color: #0f6cbd; font-weight: 600; }
+.preview { width: 180px; height: 180px; margin: 6px 0 0 22px; display: flex; align-items: center; justify-content: center; border: 1px solid #ddd; background: #fafafa; overflow: hidden; font-size: 12px; color: #666; text-align: center; }
+.preview img { max-width: 170px; max-height: 170px; transition: transform 0.2s; }

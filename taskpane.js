@@ -172,9 +172,10 @@ function renderAttachments() {
     if (!isCloud && ROTATABLE[ext.slice(1).toLowerCase()]) {
       const left = rotateButton("↺", -90, "Ruota 90° in senso antiorario");
       const right = rotateButton("↻", 90, "Ruota 90° in senso orario");
+      const preview = rotateButton("Anteprima", 0, "Mostra l'anteprima (per i PDF: prima pagina)");
       const angle = document.createElement("span");
       angle.className = "angle";
-      info.append(" ", left, right, angle);
+      info.append(" ", left, right, preview, angle);
     }
     row.append(line, info);
     box.append(row);
@@ -203,6 +204,50 @@ function onRotateClick(e) {
   const rotation = (Number(row.dataset.rotation) + Number(btn.dataset.delta) + 360) % 360;
   row.dataset.rotation = rotation;
   row.querySelector(".angle").textContent = rotation ? ` ruotato ${rotation}° orario` : "";
+  showPreview(row);
+}
+
+async function showPreview(row) {
+  let box = row.querySelector(".preview");
+  if (!box) {
+    box = document.createElement("div");
+    box.className = "preview";
+    box.textContent = "Caricamento anteprima…";
+    row.append(box);
+    try {
+      const bytes = await attachmentBytes(row.dataset.id);
+      const ext = row.dataset.ext.slice(1).toLowerCase();
+      const img = document.createElement("img");
+      img.alt = "Anteprima";
+      img.src = ext === "pdf" ? await pdfThumbnail(bytes) : URL.createObjectURL(new Blob([bytes], { type: ROTATABLE[ext] }));
+      box.replaceChildren(img);
+    } catch (e) {
+      box.textContent = `Anteprima non disponibile: ${e.message || e}`;
+      return;
+    }
+  }
+  const img = box.querySelector("img");
+  if (img) img.style.transform = `rotate(${row.dataset.rotation}deg)`;
+}
+
+let pdfjsModule;
+async function pdfThumbnail(bytes) {
+  const pdfjs = await (pdfjsModule ??= import("./pdf.min.mjs"));
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", location.href).href;
+  // pdf.js detaches the buffer it receives, so pass a copy
+  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  try {
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 340 / Math.max(base.width, base.height) });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    return canvas.toDataURL("image/png");
+  } finally {
+    doc.destroy();
+  }
 }
 
 function formatSize(bytes) {
@@ -223,6 +268,17 @@ function getAttachmentContent(id) {
   return new Promise((resolve, reject) =>
     Office.context.mailbox.item.getAttachmentContentAsync(id, (r) =>
       r.status === Office.AsyncResultStatus.Succeeded ? resolve(r.value) : reject(r.error)));
+}
+
+const contentCache = new Map();
+function attachmentBytes(id) {
+  if (!contentCache.has(id)) {
+    contentCache.set(id, getAttachmentContent(id).then(contentToBytes).catch((e) => {
+      contentCache.delete(id);
+      throw e;
+    }));
+  }
+  return contentCache.get(id);
 }
 
 function getMailAsEml() {
@@ -320,8 +376,7 @@ async function save() {
 
   for (const row of selectedAttachments()) {
     try {
-      const content = await getAttachmentContent(row.dataset.id);
-      let bytes = contentToBytes(content);
+      let bytes = await attachmentBytes(row.dataset.id);
       const ext = row.dataset.ext;
       const rotation = Number(row.dataset.rotation);
       if (rotation) bytes = await rotate(bytes, ext.slice(1).toLowerCase(), rotation);
