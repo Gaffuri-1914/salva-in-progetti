@@ -235,7 +235,16 @@ async function pdfThumbnail(bytes) {
   const pdfjs = await (pdfjsModule ??= import("./pdf.min.mjs"));
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", location.href).href;
   // pdf.js detaches the buffer it receives, so pass a copy
-  const task = pdfjs.getDocument({ data: bytes.slice() });
+  const res = (p) => new URL(`pdfjs/${p}/`, location.href).href;
+  // scans need the wasm image decoders (JPX/JBIG2) and ICC profiles, otherwise pages render blank
+  const task = pdfjs.getDocument({
+    data: bytes.slice(),
+    wasmUrl: res("wasm"),
+    iccUrl: res("iccs"),
+    standardFontDataUrl: res("standard_fonts"),
+    cMapUrl: res("cmaps"),
+    cMapPacked: true,
+  });
   const doc = await task.promise;
   try {
     const page = await doc.getPage(1);
