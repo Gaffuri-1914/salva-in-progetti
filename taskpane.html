@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Salva in Progetti</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="msal-browser.min.js"></script>
+  <link rel="stylesheet" href="taskpane.css">
+</head>
+<body>
+  <h1>Salva in Progetti</h1>
+
+  <label for="search">Numero o nome progetto</label>
+  <input id="search" type="text" placeholder="es. 41670" autocomplete="off" disabled>
+  <select id="project" size="6" disabled></select>
+  <p id="projectInfo" class="hint">Caricamento elenco progetti…</p>
+
+  <label for="folder">Sottocartella</label>
+  <select id="folder" disabled></select>
+
+  <fieldset>
+    <legend>Allegati</legend>
+    <div id="attachments"></div>
+  </fieldset>
+
+  <label class="check"><input id="saveMail" type="checkbox"> Salva anche la mail (.eml)</label>
+
+  <button id="save" disabled>Salva</button>
+  <div id="status" role="status"></div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>
